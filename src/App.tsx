@@ -169,10 +169,13 @@ const SimuladorPlanificacion = () => {
         .flat()
         .map((p) => p.fin)
     );
+  
     return Object.entries(resultados).map(([algoritmo, lista]) => (
       <div key={algoritmo} className="overflow-x-auto mb-8 bg-white p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-2">{algoritmo}</h2>
-        <table className="w-auto mx-auto border-collapse border  text-sm">
+  
+        {/* Diagrama de Gantt */}
+        <table className="w-auto mx-auto border-collapse border text-sm mb-6">
           <thead>
             <tr>
               <th className="border p-2">Proceso</th>
@@ -203,9 +206,43 @@ const SimuladorPlanificacion = () => {
             ))}
           </tbody>
         </table>
+  
+        {/* Tabla de resultados */}
+        <h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
+        <table className="w-full text-sm border border-gray-300">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="border p-2">Proceso</th>
+              <th className="border p-2">Llegada</th>
+              <th className="border p-2">Duración</th>
+              <th className="border p-2">Inicio</th>
+              <th className="border p-2">Fin</th>
+              <th className="border p-2">Retorno</th>
+              <th className="border p-2">Espera</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map((p) => {
+              const retorno = p.fin - p.llegada;
+              const espera = p.inicio - p.llegada;
+              return (
+                <tr key={p.id}>
+                  <td className="border p-2 text-center">{p.id}</td>
+                  <td className="border p-2 text-center">{p.llegada}</td>
+                  <td className="border p-2 text-center">{p.duracion}</td>
+                  <td className="border p-2 text-center">{p.inicio}</td>
+                  <td className="border p-2 text-center">{p.fin}</td>
+                  <td className="border p-2 text-center">{retorno}</td>
+                  <td className="border p-2 text-center">{espera}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     ));
   };
+  
 
   return (
     <div className="p-8 font-sans bg-gray-100 min-h-screen">
