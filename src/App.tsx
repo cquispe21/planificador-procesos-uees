@@ -94,6 +94,54 @@ const SimuladorPlanificacion = () => {
     return completados;
   };
 
+
+  const calcularPQS = (quantum = 2): ResultadoProceso[] => {
+    const pendientes = [...procesos].sort((a, b) => a.llegada - b.llegada);
+    let tiempo = 0;
+    const resultados: ResultadoProceso[] = [];
+    const cola: (Proceso & { restante: number })[] = [];
+  
+    let index = 0;
+    while (pendientes.length > 0 || cola.length > 0) {
+      // Agregar procesos que han llegado
+      while (index < pendientes.length && pendientes[index].llegada <= tiempo) {
+        cola.push({ ...pendientes[index], restante: pendientes[index].duracion });
+        index++;
+      }
+  
+      if (cola.length === 0) {
+        tiempo = pendientes[index]?.llegada ?? tiempo + 1;
+        continue;
+      }
+  
+      // Ordenar por prioridad
+      cola.sort((a, b) => a.prioridad - b.prioridad);
+  
+      const actual = cola.shift()!;
+      const inicio = tiempo;
+      const ejec = Math.min(quantum, actual.restante);
+      tiempo += ejec;
+      actual.restante -= ejec;
+  
+      if (actual.restante > 0) {
+        // Reinsertar al final del ciclo
+        cola.push({ ...actual });
+      } else {
+        resultados.push({ ...actual, inicio, fin: tiempo });
+      }
+    }
+  
+    return resultados;
+  };
+  
+
+
+
+
+
+
+
+
   const calcularPrioridades = (): ResultadoProceso[] => {
     const lista = [...procesos].sort((a, b) => a.llegada - b.llegada);
     let tiempo = 0;
@@ -124,12 +172,18 @@ const SimuladorPlanificacion = () => {
       setResultados({ RoundRobin: calcularRoundRobin() });
     } else if (onSelect === "Prioridades") {
       setResultados({ Prioridades: calcularPrioridades() });
-    } else if (onSelect === "Todos") {
+    } 
+    else if (onSelect === "PQS") {
+      setResultados({ PQS: calcularPQS() });
+    }
+    
+    else if (onSelect === "Todos") {
       setResultados({
         FCFS: calcularFCFS(),
         SJF: calcularSJF(),
         RoundRobin: calcularRoundRobin(),
         Prioridades: calcularPrioridades(),
+        PQS: calcularPQS(),
       });
     } else {
       setError("Seleccione un algoritmo");
@@ -145,7 +199,13 @@ const SimuladorPlanificacion = () => {
       setOnSelect("RoundRobin");
     } else if (algoritmo === "Prioridades") {
       setOnSelect("Prioridades");
-    } else if (algoritmo === "Todos") {
+    } 
+        
+    else if (algoritmo === "PQS") {
+      setOnSelect("PQS");
+    }
+    
+    else if (algoritmo === "Todos") {
       setOnSelect("Todos");
     } else {
       setOnSelect("");
@@ -371,6 +431,8 @@ const SimuladorPlanificacion = () => {
         <option value="SJF">SJF</option>
         <option value="RoundRobin">Round Robin</option>
         <option value="Prioridades">Prioridades</option>
+        <option value="PQS">PQS (Quantum y Prioridad)</option>
+
         <option value="Todos">Todos</option>
       </select>
       <div className="mb-6">
