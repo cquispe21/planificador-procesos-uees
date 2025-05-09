@@ -116,7 +116,6 @@ const SimuladorPlanificacion = () => {
   };
 
   const ejecutar = () => {
-
     if (onSelect === "FCFS") {
       setResultados({ FCFS: calcularFCFS() });
     } else if (onSelect === "SJF") {
@@ -135,7 +134,6 @@ const SimuladorPlanificacion = () => {
     } else {
       setError("Seleccione un algoritmo");
     }
-    
   };
 
   const onSelectAlgoritmo = (algoritmo: string) => {
@@ -143,23 +141,18 @@ const SimuladorPlanificacion = () => {
       setOnSelect("FCFS");
     } else if (algoritmo === "SJF") {
       setOnSelect("SJF");
-    }
-    else if (algoritmo === "RoundRobin") {
+    } else if (algoritmo === "RoundRobin") {
       setOnSelect("RoundRobin");
-    }
-    else if (algoritmo === "Prioridades") {
+    } else if (algoritmo === "Prioridades") {
       setOnSelect("Prioridades");
-    }
-    else if (algoritmo === "Todos") {
+    } else if (algoritmo === "Todos") {
       setOnSelect("Todos");
-     
-    }
-    else {
+    } else {
       setOnSelect("");
       setResultados(null);
     }
     setError("");
-  }
+  };
 
   const renderGanttTabla = (resultados: {
     [key: string]: ResultadoProceso[];
@@ -169,12 +162,14 @@ const SimuladorPlanificacion = () => {
         .flat()
         .map((p) => p.fin)
     );
-  
+
     return Object.entries(resultados).map(([algoritmo, lista]) => (
-      <div key={algoritmo} className="overflow-x-auto mb-8 bg-white p-4 rounded shadow">
-        <h2 className="text-xl font-semibold mb-2">{algoritmo}</h2>
-  
-        {/* Diagrama de Gantt */}
+      <div
+        key={algoritmo}
+        className="overflow-x-auto mb-8 bg-white p-4 rounded shadow"
+      >
+        <h2 className="text-xl font-semibold mb-4">{algoritmo}</h2>
+
         <table className="w-auto mx-auto border-collapse border text-sm mb-6">
           <thead>
             <tr>
@@ -206,43 +201,93 @@ const SimuladorPlanificacion = () => {
             ))}
           </tbody>
         </table>
-  
-        {/* Tabla de resultados */}
+{/* 
         <h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
         <table className="w-full text-sm border border-gray-300">
           <thead className="bg-gray-100">
             <tr>
               <th className="border p-2">Proceso</th>
-              <th className="border p-2">Llegada</th>
-              <th className="border p-2">Duración</th>
-              <th className="border p-2">Inicio</th>
-              <th className="border p-2">Fin</th>
-              <th className="border p-2">Retorno</th>
-              <th className="border p-2">Espera</th>
+              <th className="border p-2">
+                {algoritmo === "RoundRobin" ? "T. Ráfaga" : "Duración"}
+              </th>
+              <th className="border p-2">Orden</th>
+              <th className="border p-2">Tiempo de Espera</th>
+              <th className="border p-2">Tiempo de Retorno</th>
             </tr>
           </thead>
           <tbody>
-            {lista.map((p) => {
-              const retorno = p.fin - p.llegada;
+            {lista.map((p, index) => {
               const espera = p.inicio - p.llegada;
+              const retorno = p.fin - p.llegada;
               return (
                 <tr key={p.id}>
                   <td className="border p-2 text-center">{p.id}</td>
-                  <td className="border p-2 text-center">{p.llegada}</td>
                   <td className="border p-2 text-center">{p.duracion}</td>
-                  <td className="border p-2 text-center">{p.inicio}</td>
-                  <td className="border p-2 text-center">{p.fin}</td>
-                  <td className="border p-2 text-center">{retorno}</td>
+                  <td className="border p-2 text-center">{index + 1}</td>
                   <td className="border p-2 text-center">{espera}</td>
+                  <td className="border p-2 text-center">{retorno}</td>
                 </tr>
               );
             })}
           </tbody>
-        </table>
+        </table> */}
+
+
+<h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
+<table className="w-full text-sm border border-gray-300">
+  <thead className="bg-gray-100">
+    <tr>
+      <th className="border p-2">Proceso</th>
+      <th className="border p-2">Tiempo de llegada</th>
+      <th className="border p-2">Tiempo de ráfaga</th>
+      <th className="border p-2">Tiempo de finalización</th>
+      <th className="border p-2">Tiempo de retorno</th>
+      <th className="border p-2">Tiempo de espera</th>
+    </tr>
+  </thead>
+  <tbody>
+    {lista.map((p) => {
+      const retorno = p.fin - p.llegada;
+      const espera = retorno - p.duracion;
+      return (
+        <tr key={p.id}>
+          <td className="border p-2 text-center">{p.id}</td>
+          <td className="border p-2 text-center">{p.llegada}</td>
+          <td className="border p-2 text-center">{p.duracion}</td>
+          <td className="border p-2 text-center">{p.fin}</td>
+          <td className="border p-2 text-center">{retorno}</td>
+          <td className="border p-2 text-center">{espera}</td>
+        </tr>
+      );
+    })}
+    {/* Fila de promedios */}
+    <tr className="bg-gray-100 font-semibold">
+      <td colSpan={4} className="border p-2 text-right">Promedio</td>
+      <td className="border p-2 text-center">
+        {(() => {
+          const totalRetorno = lista.reduce((acc, p) => acc + (p.fin - p.llegada), 0);
+          const promedioRetorno = (totalRetorno / lista.length).toFixed(3);
+          return `${totalRetorno} / ${lista.length} = ${promedioRetorno}`;
+        })()}
+      </td>
+      <td className="border p-2 text-center">
+        {(() => {
+          const totalEspera = lista.reduce((acc, p) => acc + ((p.fin - p.llegada) - p.duracion), 0);
+          const promedioEspera = (totalEspera / lista.length).toFixed(3);
+          return `${totalEspera} / ${lista.length} = ${promedioEspera}`;
+        })()}
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+
+
       </div>
     ));
   };
-  
 
   return (
     <div className="p-8 font-sans bg-gray-100 min-h-screen">
@@ -296,7 +341,6 @@ const SimuladorPlanificacion = () => {
         {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
       </div>
 
-     
       <div className="bg-white p-4 rounded shadow mb-6">
         <h2 className="text-xl font-semibold mb-2">2. Lista de Procesos</h2>
         {procesos.length === 0 ? (
@@ -345,7 +389,6 @@ const SimuladorPlanificacion = () => {
         </button>
       </div>
 
-      {/* Resultados */}
       {resultados && renderGanttTabla(resultados)}
     </div>
   );
