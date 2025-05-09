@@ -103,19 +103,19 @@ const SimuladorPlanificacion = () => {
   
     let index = 0;
     while (index < pendientes.length || cola.length > 0) {
-      // Agregar procesos que han llegado hasta el tiempo actual
+     
       while (index < pendientes.length && pendientes[index].llegada <= tiempo) {
         cola.push({ ...pendientes[index], restante: pendientes[index].duracion });
         index++;
       }
   
       if (cola.length === 0) {
-        // Adelantar el tiempo al siguiente proceso si la cola está vacía
+        
         tiempo = pendientes[index]?.llegada ?? tiempo;
         continue;
       }
   
-      // Ordenar por prioridad
+      
       cola.sort((a, b) => a.prioridad - b.prioridad);
   
       const actual = cola.shift()!;
@@ -125,7 +125,7 @@ const SimuladorPlanificacion = () => {
       actual.restante -= ejec;
   
       if (actual.restante > 0) {
-        // Reinsertar con la nueva llegada (ciclo siguiente)
+       
         cola.push({ ...actual });
       } else {
         resultados.push({ ...actual, inicio, fin: tiempo });
@@ -322,7 +322,7 @@ const SimuladorPlanificacion = () => {
         </tr>
       );
     })}
-    {/* Fila de promedios */}
+
     <tr className="bg-gray-100 font-semibold">
       <td colSpan={4} className="border p-2 text-right">Promedio</td>
       <td className="border p-2 text-center">
