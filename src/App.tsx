@@ -18,6 +18,8 @@ const SimuladorPlanificacion = () => {
     prioridad: 0,
   });
   const [onSelect, setOnSelect] = useState<string>("");
+  const [quantum, setQuantum] = useState<number>(2);
+
   const [error, setError] = useState<string>("");
   const [resultados, setResultados] = useState<{
     [key: string]: ResultadoProceso[];
@@ -69,30 +71,44 @@ const SimuladorPlanificacion = () => {
     return resultados;
   };
 
-  const calcularRoundRobin = (quantum = 2): ResultadoProceso[] => {
-    const cola = [...procesos].map((p) => ({ ...p, restante: p.duracion }));
-    let tiempo = 0;
-    const completados: ResultadoProceso[] = [];
-    const tiemposFinales: { [id: string]: number } = {};
-
+  const calcularRoundRobin = (): ResultadoProceso[] => {
+    const cola = [...procesos].map((p) => ({ ...p, restante: p.duracion })); // Creamos una copia de los procesos
+    let tiempo = 0; // Tiempo de ejecución
+    const completados: ResultadoProceso[] = []; // Resultados
+    const tiemposFinales: { [id: string]: number } = {}; // Guardamos los tiempos finales
+    const ordenEjecucion: { [id: string]: number } = {}; // Guardamos los tiempos de inicio por orden de ejecución
+  
+    // Mientras haya procesos en la cola
     while (cola.length > 0) {
-      const actual = cola.shift()!;
-      if (actual.llegada > tiempo) tiempo = actual.llegada;
-
-      const ejec = Math.min(quantum, actual.restante);
-      actual.restante -= ejec;
-      tiempo += ejec;
-
+      const actual = cola.shift()!; // Sacamos el primer proceso de la cola
+  
+      if (actual.llegada > tiempo) tiempo = actual.llegada; // Si el proceso llega después del tiempo actual, avanzamos el tiempo al de llegada
+  
+      const ejec = Math.min(quantum, actual.restante); // Cuánto se ejecuta en este ciclo, según el quantum
+  
+      actual.restante -= ejec; // Reducimos el tiempo restante del proceso
+      tiempo += ejec; // Avanzamos el tiempo total
+  
+      // Si es la primera vez que ejecutamos este proceso, guardamos el tiempo de inicio
+      if (!ordenEjecucion[actual.id]) ordenEjecucion[actual.id] = tiempo - ejec;
+  
+      // Si el proceso no ha terminado, lo agregamos nuevamente a la cola con el nuevo tiempo de llegada
       if (actual.restante > 0) {
-        cola.push({ ...actual, llegada: tiempo });
+        cola.push({ ...actual, llegada: tiempo }); // No cambiamos la llegada, solo actualizamos el tiempo de llegada a cuando vuelve a la cola
       } else {
+        // Si terminó, guardamos el tiempo final
         tiemposFinales[actual.id] = tiempo;
-        completados.push({ ...actual, inicio: tiempo - ejec, fin: tiempo });
+        completados.push({
+          ...actual,
+          inicio: ordenEjecucion[actual.id],
+          fin: tiempo,
+        });
       }
     }
-
+  
     return completados;
   };
+  
 
   const calcularPrioridades = (): ResultadoProceso[] => {
     const lista = [...procesos].sort((a, b) => a.llegada - b.llegada);
@@ -137,20 +153,7 @@ const SimuladorPlanificacion = () => {
   };
 
   const onSelectAlgoritmo = (algoritmo: string) => {
-    if (algoritmo === "FCFS") {
-      setOnSelect("FCFS");
-    } else if (algoritmo === "SJF") {
-      setOnSelect("SJF");
-    } else if (algoritmo === "RoundRobin") {
-      setOnSelect("RoundRobin");
-    } else if (algoritmo === "Prioridades") {
-      setOnSelect("Prioridades");
-    } else if (algoritmo === "Todos") {
-      setOnSelect("Todos");
-    } else {
-      setOnSelect("");
-      setResultados(null);
-    }
+    setOnSelect(algoritmo);
     setError("");
   };
 
@@ -201,90 +204,65 @@ const SimuladorPlanificacion = () => {
             ))}
           </tbody>
         </table>
-{/* 
+
         <h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
         <table className="w-full text-sm border border-gray-300">
           <thead className="bg-gray-100">
             <tr>
               <th className="border p-2">Proceso</th>
-              <th className="border p-2">
-                {algoritmo === "RoundRobin" ? "T. Ráfaga" : "Duración"}
-              </th>
-              <th className="border p-2">Orden</th>
-              <th className="border p-2">Tiempo de Espera</th>
-              <th className="border p-2">Tiempo de Retorno</th>
+              <th className="border p-2">Tiempo de llegada</th>
+              <th className="border p-2">Tiempo de ráfaga</th>
+              <th className="border p-2">Tiempo de finalización</th>
+              <th className="border p-2">Tiempo de retorno</th>
+              <th className="border p-2">Tiempo de espera</th>
             </tr>
           </thead>
           <tbody>
-            {lista.map((p, index) => {
-              const espera = p.inicio - p.llegada;
+            {lista.map((p) => {
               const retorno = p.fin - p.llegada;
+              const espera = retorno - p.duracion;
               return (
                 <tr key={p.id}>
                   <td className="border p-2 text-center">{p.id}</td>
+                  <td className="border p-2 text-center">{p.llegada}</td>
                   <td className="border p-2 text-center">{p.duracion}</td>
-                  <td className="border p-2 text-center">{index + 1}</td>
-                  <td className="border p-2 text-center">{espera}</td>
+                  <td className="border p-2 text-center">{p.fin}</td>
                   <td className="border p-2 text-center">{retorno}</td>
+                  <td className="border p-2 text-center">{espera}</td>
                 </tr>
               );
             })}
+            <tr className="bg-gray-100 font-semibold">
+              <td colSpan={4} className="border p-2 text-right">
+                Promedio
+              </td>
+              <td className="border p-2 text-center">
+                {(() => {
+                  const totalRetorno = lista.reduce(
+                    (acc, p) => acc + (p.fin - p.llegada),
+                    0
+                  );
+                  const promedioRetorno = (totalRetorno / lista.length).toFixed(
+                    3
+                  );
+                  return `${totalRetorno} / ${lista.length} = ${promedioRetorno}`;
+                })()}
+              </td>
+              <td className="border p-2 text-center">
+                {(() => {
+                  const totalEspera = lista.reduce(
+                    (acc, p) => acc + (p.fin - p.llegada - p.duracion),
+                    0
+                  );
+                  const promedioEspera = (totalEspera / lista.length).toFixed(
+                    3
+                  );
+                  return `${totalEspera} / ${lista.length} = ${promedioEspera}`;
+                })()}
+              </td>
+            </tr>
           </tbody>
-        </table> */}
-
-
-<h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
-<table className="w-full text-sm border border-gray-300">
-  <thead className="bg-gray-100">
-    <tr>
-      <th className="border p-2">Proceso</th>
-      <th className="border p-2">Tiempo de llegada</th>
-      <th className="border p-2">Tiempo de ráfaga</th>
-      <th className="border p-2">Tiempo de finalización</th>
-      <th className="border p-2">Tiempo de retorno</th>
-      <th className="border p-2">Tiempo de espera</th>
-    </tr>
-  </thead>
-  <tbody>
-    {lista.map((p) => {
-      const retorno = p.fin - p.llegada;
-      const espera = retorno - p.duracion;
-      return (
-        <tr key={p.id}>
-          <td className="border p-2 text-center">{p.id}</td>
-          <td className="border p-2 text-center">{p.llegada}</td>
-          <td className="border p-2 text-center">{p.duracion}</td>
-          <td className="border p-2 text-center">{p.fin}</td>
-          <td className="border p-2 text-center">{retorno}</td>
-          <td className="border p-2 text-center">{espera}</td>
-        </tr>
-      );
-    })}
-    {/* Fila de promedios */}
-    <tr className="bg-gray-100 font-semibold">
-      <td colSpan={4} className="border p-2 text-right">Promedio</td>
-      <td className="border p-2 text-center">
-        {(() => {
-          const totalRetorno = lista.reduce((acc, p) => acc + (p.fin - p.llegada), 0);
-          const promedioRetorno = (totalRetorno / lista.length).toFixed(3);
-          return `${totalRetorno} / ${lista.length} = ${promedioRetorno}`;
-        })()}
-      </td>
-      <td className="border p-2 text-center">
-        {(() => {
-          const totalEspera = lista.reduce((acc, p) => acc + ((p.fin - p.llegada) - p.duracion), 0);
-          const promedioEspera = (totalEspera / lista.length).toFixed(3);
-          return `${totalEspera} / ${lista.length} = ${promedioEspera}`;
-        })()}
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-
-
-
-
+        </table>
       </div>
     ));
   };
@@ -301,7 +279,7 @@ const SimuladorPlanificacion = () => {
           <div className="flex flex-col">
             <label className="text-sm">Llegada</label>
             <input
-              type="text"
+              type="number"
               className="border p-2 rounded"
               value={nuevo.llegada}
               onChange={(e) => setNuevo({ ...nuevo, llegada: +e.target.value })}
@@ -310,7 +288,7 @@ const SimuladorPlanificacion = () => {
           <div className="flex flex-col">
             <label className="text-sm">Duración</label>
             <input
-              type="text"
+              type="number"
               className="border p-2 rounded"
               value={nuevo.duracion}
               onChange={(e) =>
@@ -321,7 +299,7 @@ const SimuladorPlanificacion = () => {
           <div className="flex flex-col">
             <label className="text-sm">Prioridad</label>
             <input
-              type="text"
+              type="number"
               className="border p-2 rounded"
               value={nuevo.prioridad}
               onChange={(e) =>
@@ -373,6 +351,19 @@ const SimuladorPlanificacion = () => {
         <option value="Prioridades">Prioridades</option>
         <option value="Todos">Todos</option>
       </select>
+      {onSelect === "RoundRobin" && (
+        <div className="mb-4">
+          <label className="block text-sm mb-1">Quantum:</label>
+          <input
+            type="number"
+            className="border p-2 rounded w-32"
+            min={1}
+            value={quantum}
+            onChange={(e) => setQuantum(+e.target.value)}
+          />
+        </div>
+      )}
+
       <div className="mb-6">
         <button
           className={`px-6 py-3 rounded text-white font-bold ${
