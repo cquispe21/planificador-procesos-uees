@@ -95,22 +95,23 @@ const SimuladorPlanificacion = () => {
   };
 
 
-  const calcularPQS = (quantum = 2): ResultadoProceso[] => {
+  const calcularPQS = (quantum = 5): ResultadoProceso[] => {
     const pendientes = [...procesos].sort((a, b) => a.llegada - b.llegada);
     let tiempo = 0;
     const resultados: ResultadoProceso[] = [];
     const cola: (Proceso & { restante: number })[] = [];
   
     let index = 0;
-    while (pendientes.length > 0 || cola.length > 0) {
-      // Agregar procesos que han llegado
+    while (index < pendientes.length || cola.length > 0) {
+      // Agregar procesos que han llegado hasta el tiempo actual
       while (index < pendientes.length && pendientes[index].llegada <= tiempo) {
         cola.push({ ...pendientes[index], restante: pendientes[index].duracion });
         index++;
       }
   
       if (cola.length === 0) {
-        tiempo = pendientes[index]?.llegada ?? tiempo + 1;
+        // Adelantar el tiempo al siguiente proceso si la cola está vacía
+        tiempo = pendientes[index]?.llegada ?? tiempo;
         continue;
       }
   
@@ -124,7 +125,7 @@ const SimuladorPlanificacion = () => {
       actual.restante -= ejec;
   
       if (actual.restante > 0) {
-        // Reinsertar al final del ciclo
+        // Reinsertar con la nueva llegada (ciclo siguiente)
         cola.push({ ...actual });
       } else {
         resultados.push({ ...actual, inicio, fin: tiempo });
@@ -133,6 +134,7 @@ const SimuladorPlanificacion = () => {
   
     return resultados;
   };
+  
   
 
 
