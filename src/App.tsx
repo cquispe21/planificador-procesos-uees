@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 type Proceso = {
   id: string;
@@ -7,7 +7,12 @@ type Proceso = {
   prioridad: number;
 };
 
-type ResultadoProceso = Proceso & { inicio: number; fin: number };
+type ResultadoProceso = Proceso & {
+  inicio: number;
+  fin: number;
+  reciclado?: number;
+  segmento?: number;
+};
 
 const SimuladorPlanificacion = () => {
   const [procesos, setProcesos] = useState<Proceso[]>([]);
@@ -15,14 +20,20 @@ const SimuladorPlanificacion = () => {
     id: "",
     llegada: 0,
     duracion: 0,
-    prioridad: 0,
+    prioridad: 1,
   });
-  const [onSelect, setOnSelect] = useState<string>("");
+  const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
+  const [editProcess, setEditProcess] = useState<Proceso | null>(null);
+  const [onSelect, setOnSelect] = useState<string[]>([]);
+  const [quantum, setQuantum] = useState<number>(5);
   const [error, setError] = useState<string>("");
   const [resultados, setResultados] = useState<{
     [key: string]: ResultadoProceso[];
   } | null>(null);
-  const [contadorId, setContadorId] = useState<number>(1);
+  const [contadorId, setContadorId] = useState<number>(0);
+  const llegadaInputRef = useRef<HTMLInputElement>(null);
+
+  const algoritmos = ["FCFS", "SJF", "RoundRobin", "Prioridades", "PQS"];
 
   const agregarProceso = () => {
     if (nuevo.duracion <= 0) {
@@ -32,26 +43,91 @@ const SimuladorPlanificacion = () => {
 
     const idGenerado = `P${contadorId}`;
     setProcesos([...procesos, { ...nuevo, id: idGenerado }]);
-    setNuevo({ id: "", llegada: 0, duracion: 0, prioridad: 0 });
+    setNuevo({ id: "", llegada: 0, duracion: 0, prioridad: 1 });
     setError("");
     setContadorId(contadorId + 1);
+    if (llegadaInputRef.current) {
+      llegadaInputRef.current.focus();
+    }
   };
 
-  const calcularFCFS = (): ResultadoProceso[] => {
-    const lista = [...procesos].sort((a, b) => a.llegada - b.llegada);
+  const handleDeleteProcess = (id: string) => {
+    const updatedProcesses = procesos.filter((p) => p.id !== id);
+    setProcesos(updatedProcesses);
+    setError("");
+    if (updatedProcesses.length === 0) {
+      setResultados(null);
+    } else if (onSelect.length > 0) {
+      ejecutar(updatedProcesses);
+    }
+    if (editingProcessId === id) {
+      setEditingProcessId(null);
+      setEditProcess(null);
+    }
+  };
+
+  const handleEditProcess = (id: string) => {
+    const process = procesos.find((p) => p.id === id);
+    if (process) {
+      setEditingProcessId(id);
+      setEditProcess({ ...process });
+      setError("");
+    }
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (!editProcess || editProcess.duracion <= 0) {
+      setError("Debe ingresar una duración mayor a 0");
+      return;
+    }
+    if (editProcess.prioridad < 1) {
+      setError("La prioridad debe ser mayor o igual a 1");
+      return;
+    }
+
+    const updatedProcesses = procesos.map((p) =>
+      p.id === id ? { ...editProcess, id } : p
+    );
+    setProcesos(updatedProcesses);
+    setEditingProcessId(null);
+    setEditProcess(null);
+    setError("");
+    if (onSelect.length > 0) {
+      ejecutar(updatedProcesses);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProcessId(null);
+    setEditProcess(null);
+    setError("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      if (editingProcessId && editProcess) {
+        handleSaveEdit(editingProcessId);
+      } else {
+        agregarProceso();
+      }
+    }
+  };
+
+  const calcularFCFS = (lista: Proceso[]): ResultadoProceso[] => {
+    const sorted = [...lista].sort((a, b) => a.llegada - b.llegada);
     let tiempo = 0;
-    return lista.map((p) => {
+    return sorted.map((p) => {
       const inicio = Math.max(tiempo, p.llegada);
       const fin = inicio + p.duracion;
       tiempo = fin;
-      return { ...p, inicio, fin };
+      return { ...p, inicio, fin, segmento: 1 };
     });
   };
 
-  const calcularSJF = (): ResultadoProceso[] => {
-    const lista = [...procesos].sort((a, b) => a.llegada - b.llegada);
+  const calcularSJF = (lista: Proceso[]): ResultadoProceso[] => {
+    const sorted = [...lista].sort((a, b) => a.llegada - b.llegada);
     let tiempo = 0;
-    let pendientes = [...lista];
+    let pendientes = [...sorted];
     const resultados: ResultadoProceso[] = [];
 
     while (pendientes.length > 0) {
@@ -63,91 +139,52 @@ const SimuladorPlanificacion = () => {
       const inicio = Math.max(tiempo, siguiente.llegada);
       const fin = inicio + siguiente.duracion;
       tiempo = fin;
-      resultados.push({ ...siguiente, inicio, fin });
+      resultados.push({ ...siguiente, inicio, fin, segmento: 1 });
       pendientes = pendientes.filter((p) => p.id !== siguiente.id);
     }
     return resultados;
   };
 
-  const calcularRoundRobin = (quantum = 2): ResultadoProceso[] => {
-    const cola = [...procesos].map((p) => ({ ...p, restante: p.duracion }));
+  const calcularRoundRobin = (lista: Proceso[], quantum: number): ResultadoProceso[] => {
+    type ProcesoRR = Proceso & { restante: number; segmento: number };
+    const cola: ProcesoRR[] = [...lista].map((p) => ({
+      ...p,
+      restante: p.duracion,
+      segmento: 1,
+    }));
     let tiempo = 0;
     const completados: ResultadoProceso[] = [];
-    const tiemposFinales: { [id: string]: number } = {};
 
     while (cola.length > 0) {
       const actual = cola.shift()!;
       if (actual.llegada > tiempo) tiempo = actual.llegada;
 
       const ejec = Math.min(quantum, actual.restante);
+      const inicio = tiempo;
+      const fin = tiempo + ejec;
+      tiempo = fin;
       actual.restante -= ejec;
-      tiempo += ejec;
+
+      completados.push({
+        ...actual,
+        inicio,
+        fin,
+        segmento: actual.segmento,
+      });
 
       if (actual.restante > 0) {
+        actual.segmento += 1;
         cola.push({ ...actual, llegada: tiempo });
-      } else {
-        tiemposFinales[actual.id] = tiempo;
-        completados.push({ ...actual, inicio: tiempo - ejec, fin: tiempo });
       }
     }
 
     return completados;
   };
 
-
-  const calcularPQS = (quantum = 5): ResultadoProceso[] => {
-    const pendientes = [...procesos].sort((a, b) => a.llegada - b.llegada);
+  const calcularPrioridades = (lista: Proceso[]): ResultadoProceso[] => {
+    const sorted = [...lista].sort((a, b) => a.llegada - b.llegada);
     let tiempo = 0;
-    const resultados: ResultadoProceso[] = [];
-    const cola: (Proceso & { restante: number })[] = [];
-  
-    let index = 0;
-    while (index < pendientes.length || cola.length > 0) {
-     
-      while (index < pendientes.length && pendientes[index].llegada <= tiempo) {
-        cola.push({ ...pendientes[index], restante: pendientes[index].duracion });
-        index++;
-      }
-  
-      if (cola.length === 0) {
-        
-        tiempo = pendientes[index]?.llegada ?? tiempo;
-        continue;
-      }
-  
-      
-      cola.sort((a, b) => a.prioridad - b.prioridad);
-  
-      const actual = cola.shift()!;
-      const inicio = tiempo;
-      const ejec = Math.min(quantum, actual.restante);
-      tiempo += ejec;
-      actual.restante -= ejec;
-  
-      if (actual.restante > 0) {
-       
-        cola.push({ ...actual });
-      } else {
-        resultados.push({ ...actual, inicio, fin: tiempo });
-      }
-    }
-  
-    return resultados;
-  };
-  
-  
-
-
-
-
-
-
-
-
-  const calcularPrioridades = (): ResultadoProceso[] => {
-    const lista = [...procesos].sort((a, b) => a.llegada - b.llegada);
-    let tiempo = 0;
-    let pendientes = [...lista];
+    let pendientes = [...sorted];
     const resultados: ResultadoProceso[] = [];
 
     while (pendientes.length > 0) {
@@ -159,61 +196,160 @@ const SimuladorPlanificacion = () => {
       const inicio = Math.max(tiempo, siguiente.llegada);
       const fin = inicio + siguiente.duracion;
       tiempo = fin;
-      resultados.push({ ...siguiente, inicio, fin });
+      resultados.push({ ...siguiente, inicio, fin, segmento: 1 });
       pendientes = pendientes.filter((p) => p.id !== siguiente.id);
     }
     return resultados;
   };
 
-  const ejecutar = () => {
-    if (onSelect === "FCFS") {
-      setResultados({ FCFS: calcularFCFS() });
-    } else if (onSelect === "SJF") {
-      setResultados({ SJF: calcularSJF() });
-    } else if (onSelect === "RoundRobin") {
-      setResultados({ RoundRobin: calcularRoundRobin() });
-    } else if (onSelect === "Prioridades") {
-      setResultados({ Prioridades: calcularPrioridades() });
-    } 
-    else if (onSelect === "PQS") {
-      setResultados({ PQS: calcularPQS() });
+  const calcularPQS = (lista: Proceso[], quantum: number): ResultadoProceso[] => {
+    type ProcesoPQS = Proceso & {
+      orden: number;
+      restante: number;
+      prioridadActual: number;
+      reciclado: number;
+      segmento: number;
+    };
+
+    const completados: ResultadoProceso[] = [];
+    let tiempo = 0;
+
+    const pendientes: ProcesoPQS[] = [...lista]
+      .sort((a, b) => a.llegada - b.llegada)
+      .map((p, index) => ({
+        ...p,
+        orden: index + 1,
+        restante: p.duracion,
+        prioridadActual: p.prioridad,
+        reciclado: 0,
+        segmento: 1,
+      }));
+
+    const ejecutando: ProcesoPQS[] = [];
+    const esperando: ProcesoPQS[] = [];
+
+    while (pendientes.length > 0 || ejecutando.length > 0 || esperando.length > 0) {
+      while (pendientes.length > 0 && pendientes[0].llegada <= tiempo) {
+        const p = pendientes.shift()!;
+        if (ejecutando.length === 0) {
+          ejecutando.push(p);
+        } else {
+          esperando.push(p);
+        }
+      }
+
+      if (ejecutando.length > 0) {
+        const actual = ejecutando[0];
+        const inicio = Math.max(tiempo, actual.llegada);
+        const ejec = Math.min(quantum, actual.restante);
+        const fin = inicio + ejec;
+
+        completados.push({
+          id: actual.id,
+          llegada: actual.llegada,
+          duracion: actual.duracion,
+          prioridad: actual.prioridad,
+          inicio,
+          fin,
+          reciclado: actual.reciclado,
+          segmento: actual.segmento,
+        });
+
+        actual.restante -= ejec;
+        tiempo = fin;
+
+        if (actual.restante === 0) {
+          ejecutando.shift();
+        } else {
+          actual.reciclado += 1;
+          actual.segmento += 1;
+          actual.prioridadActual = actual.prioridad;
+          esperando.push(actual);
+          ejecutando.shift();
+        }
+      } else if (pendientes.length > 0) {
+        tiempo = pendientes[0].llegada;
+      } else if (esperando.length > 0) {
+        const siguiente = esperando.sort(
+          (a, b) =>
+            a.prioridadActual - b.prioridadActual || a.orden - b.orden
+        )[0];
+        ejecutando.push(siguiente);
+        esperando.splice(esperando.indexOf(siguiente), 1);
+      } else {
+        tiempo += 1;
+      }
     }
-    
-    else if (onSelect === "Todos") {
-      setResultados({
-        FCFS: calcularFCFS(),
-        SJF: calcularSJF(),
-        RoundRobin: calcularRoundRobin(),
-        Prioridades: calcularPrioridades(),
-        PQS: calcularPQS(),
-      });
-    } else {
-      setError("Seleccione un algoritmo");
-    }
+
+    return completados;
   };
 
-  const onSelectAlgoritmo = (algoritmo: string) => {
-    if (algoritmo === "FCFS") {
-      setOnSelect("FCFS");
-    } else if (algoritmo === "SJF") {
-      setOnSelect("SJF");
-    } else if (algoritmo === "RoundRobin") {
-      setOnSelect("RoundRobin");
-    } else if (algoritmo === "Prioridades") {
-      setOnSelect("Prioridades");
-    } 
-        
-    else if (algoritmo === "PQS") {
-      setOnSelect("PQS");
+  const ejecutar = (customProcesses?: Proceso[]) => {
+    const lista = customProcesses || procesos;
+    if (lista.length === 0) {
+      setError("Debe ingresar al menos un proceso");
+      return;
     }
-    
-    else if (algoritmo === "Todos") {
-      setOnSelect("Todos");
+    if (
+      (onSelect.includes("RoundRobin") || onSelect.includes("PQS")) &&
+      quantum <= 0
+    ) {
+      setError("El quantum debe ser mayor a 0");
+      return;
+    }
+    if (onSelect.length === 0) {
+      setError("Seleccione al menos un algoritmo");
+      return;
+    }
+
+    const resultadosNuevos: { [key: string]: ResultadoProceso[] } = {};
+    onSelect.forEach((algoritmo) => {
+      if (algoritmo === "FCFS") {
+        resultadosNuevos.FCFS = calcularFCFS(lista);
+      } else if (algoritmo === "SJF") {
+        resultadosNuevos.SJF = calcularSJF(lista);
+      } else if (algoritmo === "RoundRobin") {
+        resultadosNuevos.RoundRobin = calcularRoundRobin(lista, quantum);
+      } else if (algoritmo === "Prioridades") {
+        resultadosNuevos.Prioridades = calcularPrioridades(lista);
+      } else if (algoritmo === "PQS") {
+        resultadosNuevos.PQS = calcularPQS(lista, quantum);
+      }
+    });
+    setResultados(resultadosNuevos);
+    setError("");
+  };
+
+  const handleAlgoritmoChange = (algoritmo: string) => {
+    if (algoritmo === "Todos") {
+      if (onSelect.length === algoritmos.length) {
+        setOnSelect([]);
+      } else {
+        setOnSelect([...algoritmos]);
+      }
     } else {
-      setOnSelect("");
-      setResultados(null);
+      if (onSelect.includes(algoritmo)) {
+        setOnSelect(onSelect.filter((a) => a !== algoritmo));
+      } else {
+        setOnSelect([...onSelect, algoritmo]);
+      }
     }
     setError("");
+  };
+
+  const resetearTodo = () => {
+    setProcesos([]);
+    setNuevo({ id: "", llegada: 0, duracion: 0, prioridad: 1 });
+    setEditingProcessId(null);
+    setEditProcess(null);
+    setOnSelect([]);
+    setQuantum(5);
+    setResultados(null);
+    setContadorId(0);
+    setError("");
+    if (llegadaInputRef.current) {
+      llegadaInputRef.current.focus();
+    }
   };
 
   const renderGanttTabla = (resultados: {
@@ -225,130 +361,139 @@ const SimuladorPlanificacion = () => {
         .map((p) => p.fin)
     );
 
-    return Object.entries(resultados).map(([algoritmo, lista]) => (
-      <div
-        key={algoritmo}
-        className="overflow-x-auto mb-8 bg-white p-4 rounded shadow"
-      >
-        <h2 className="text-xl font-semibold mb-4">{algoritmo}</h2>
+    return Object.entries(resultados).map(([algoritmo, lista]) => {
+      const metricasPorProceso: { [id: string]: ResultadoProceso[] } = {};
+      lista.forEach((p) => {
+        if (!metricasPorProceso[p.id]) metricasPorProceso[p.id] = [];
+        metricasPorProceso[p.id].push(p);
+      });
 
-        <table className="w-auto mx-auto border-collapse border text-sm mb-6">
-          <thead>
-            <tr>
-              <th className="border p-2">Proceso</th>
-              {[...Array(maxTiempo).keys()].map((t) => (
-                <th key={t} className="border p-1 w-8 text-center">
-                  {t}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {lista.map((p) => (
-              <tr key={p.id}>
-                <td className="border p-2 font-bold text-center">{p.id}</td>
+      const procesosUnicos = procesos.map((p) => p.id);
+
+      return (
+        <div
+          key={algoritmo}
+          className="overflow-x-auto mb-8 bg-white p-4 rounded shadow"
+        >
+          <h2 className="text-xl font-semibold mb-4">{algoritmo}</h2>
+
+          <table className="w-auto mx-auto border-collapse border text-sm mb-6">
+            <thead>
+              <tr>
+                <th className="border p-2">Proceso</th>
                 {[...Array(maxTiempo).keys()].map((t) => (
-                  <td
-                    key={t}
-                    className={`border h-8 text-center ${
-                      t >= p.inicio && t < p.fin
-                        ? "bg-blue-500 text-white font-bold"
-                        : ""
-                    }`}
-                  >
-                    {t >= p.inicio && t < p.fin ? "X" : ""}
-                  </td>
+                  <th key={t} className="border p-1 w-8 text-center">
+                    {t}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-{/* 
-        <h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
-        <table className="w-full text-sm border border-gray-300">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border p-2">Proceso</th>
-              <th className="border p-2">
-                {algoritmo === "RoundRobin" ? "T. Ráfaga" : "Duración"}
-              </th>
-              <th className="border p-2">Orden</th>
-              <th className="border p-2">Tiempo de Espera</th>
-              <th className="border p-2">Tiempo de Retorno</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lista.map((p, index) => {
-              const espera = p.inicio - p.llegada;
-              const retorno = p.fin - p.llegada;
-              return (
-                <tr key={p.id}>
-                  <td className="border p-2 text-center">{p.id}</td>
-                  <td className="border p-2 text-center">{p.duracion}</td>
-                  <td className="border p-2 text-center">{index + 1}</td>
-                  <td className="border p-2 text-center">{espera}</td>
-                  <td className="border p-2 text-center">{retorno}</td>
+            </thead>
+            <tbody>
+              {procesosUnicos.map((id) => (
+                <tr key={id}>
+                  <td className="border p-2 font-bold text-center">{id}</td>
+                  {[...Array(maxTiempo).keys()].map((t) => {
+                    const activo = metricasPorProceso[id].some(
+                      (p) => t >= p.inicio && t < p.fin
+                    );
+                    return (
+                      <td
+                        key={t}
+                        className={`border h-8 text-center ${
+                          activo ? "bg-blue-500 text-white font-bold" : ""
+                        }`}
+                      >
+                        {activo ? "X" : ""}
+                      </td>
+                    );
+                  })}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table> */}
+              ))}
+            </tbody>
+          </table>
 
-
-<h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
-<table className="w-full text-sm border border-gray-300">
-  <thead className="bg-gray-100">
-    <tr>
-      <th className="border p-2">Proceso</th>
-      <th className="border p-2">Tiempo de llegada</th>
-      <th className="border p-2">Tiempo de ráfaga</th>
-      <th className="border p-2">Tiempo de finalización</th>
-      <th className="border p-2">Tiempo de retorno</th>
-      <th className="border p-2">Tiempo de espera</th>
-    </tr>
-  </thead>
-  <tbody>
-    {lista.map((p) => {
-      const retorno = p.fin - p.llegada;
-      const espera = retorno - p.duracion;
-      return (
-        <tr key={p.id}>
-          <td className="border p-2 text-center">{p.id}</td>
-          <td className="border p-2 text-center">{p.llegada}</td>
-          <td className="border p-2 text-center">{p.duracion}</td>
-          <td className="border p-2 text-center">{p.fin}</td>
-          <td className="border p-2 text-center">{retorno}</td>
-          <td className="border p-2 text-center">{espera}</td>
-        </tr>
+          <h3 className="text-lg font-semibold mb-2">Tabla de Resultados</h3>
+          <table className="w-full text-sm border border-gray-300">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border p-2">Proceso</th>
+                <th className="border p-2">Tiempo de llegada</th>
+                <th className="border p-2">Tiempo de ráfaga</th>
+                <th className="border p-2">Tiempo de finalización</th>
+                <th className="border p-2">Tiempo de retorno</th>
+                <th className="border p-2">Tiempo de espera</th>
+              </tr>
+            </thead>
+            <tbody>
+              {procesosUnicos.map((id) => {
+                const segmentos = metricasPorProceso[id];
+                const llegada = segmentos[0].llegada;
+                const duracion = segmentos[0].duracion;
+                const fin = Math.max(...segmentos.map((s) => s.fin));
+                const retorno = fin - llegada;
+                const espera = retorno - duracion;
+                return (
+                  <tr key={id}>
+                    <td className="border p-2 text-center">{id}</td>
+                    <td className="border p-2 text-center">{llegada}</td>
+                    <td className="border p-2 text-center">{duracion}</td>
+                    <td className="border p-2 text-center">{fin}</td>
+                    <td className="border p-2 text-center">{retorno}</td>
+                    <td className="border p-2 text-center">{espera}</td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-gray-100 font-semibold">
+                <td
+                  colSpan={4}
+                  className="border p-2 text-right"
+                >
+                  Promedio
+                </td>
+                <td className="border p-2 text-center">
+                  {(() => {
+                    const totalRetorno = procesosUnicos.reduce(
+                      (acc, id) => {
+                        const segmentos = metricasPorProceso[id];
+                        const fin = Math.max(...segmentos.map((s) => s.fin));
+                        return acc + (fin - segmentos[0].llegada);
+                      },
+                      0
+                    );
+                    const promedioRetorno = (
+                      totalRetorno / procesosUnicos.length
+                    ).toFixed(3);
+                    return `${totalRetorno} / ${
+                      procesosUnicos.length
+                    } = ${promedioRetorno}`;
+                  })()}
+                </td>
+                <td className="border p-2 text-center">
+                  {(() => {
+                    const totalEspera = procesosUnicos.reduce(
+                      (acc, id) => {
+                        const segmentos = metricasPorProceso[id];
+                        const fin = Math.max(...segmentos.map((s) => s.fin));
+                        const retorno = fin - segmentos[0].llegada;
+                        const espera = retorno - segmentos[0].duracion;
+                        return acc + espera;
+                      },
+                      0
+                    );
+                    const promedioEspera = (
+                      totalEspera / procesosUnicos.length
+                    ).toFixed(3);
+                    return `${totalEspera} / ${
+                      procesosUnicos.length
+                    } = ${promedioEspera}`;
+                  })()}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       );
-    })}
-
-    <tr className="bg-gray-100 font-semibold">
-      <td colSpan={4} className="border p-2 text-right">Promedio</td>
-      <td className="border p-2 text-center">
-        {(() => {
-          const totalRetorno = lista.reduce((acc, p) => acc + (p.fin - p.llegada), 0);
-          const promedioRetorno = (totalRetorno / lista.length).toFixed(3);
-          return `${totalRetorno} / ${lista.length} = ${promedioRetorno}`;
-        })()}
-      </td>
-      <td className="border p-2 text-center">
-        {(() => {
-          const totalEspera = lista.reduce((acc, p) => acc + ((p.fin - p.llegada) - p.duracion), 0);
-          const promedioEspera = (totalEspera / lista.length).toFixed(3);
-          return `${totalEspera} / ${lista.length} = ${promedioEspera}`;
-        })()}
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-
-
-
-
-      </div>
-    ));
+    });
   };
 
   return (
@@ -367,6 +512,8 @@ const SimuladorPlanificacion = () => {
               className="border p-2 rounded"
               value={nuevo.llegada}
               onChange={(e) => setNuevo({ ...nuevo, llegada: +e.target.value })}
+              onKeyDown={handleKeyDown}
+              ref={llegadaInputRef}
             />
           </div>
           <div className="flex flex-col">
@@ -378,6 +525,7 @@ const SimuladorPlanificacion = () => {
               onChange={(e) =>
                 setNuevo({ ...nuevo, duracion: +e.target.value })
               }
+              onKeyDown={handleKeyDown}
             />
           </div>
           <div className="flex flex-col">
@@ -387,8 +535,9 @@ const SimuladorPlanificacion = () => {
               className="border p-2 rounded"
               value={nuevo.prioridad}
               onChange={(e) =>
-                setNuevo({ ...nuevo, prioridad: +e.target.value })
+                setNuevo({ ...nuevo, prioridad: +e.target.value || 1 })
               }
+              onKeyDown={handleKeyDown}
             />
           </div>
           <div className="flex items-end">
@@ -409,47 +558,168 @@ const SimuladorPlanificacion = () => {
           <p>No hay procesos ingresados.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {procesos.map((p) => (
-              <div
-                key={p.id}
-                className="bg-gray-50 border p-4 rounded-lg shadow"
-              >
-                <h3 className="text-lg font-semibold">{p.id}</h3>
-                <p>Llegada: {p.llegada}</p>
-                <p>Duración: {p.duracion}</p>
-                <p>Prioridad: {p.prioridad}</p>
-              </div>
-            ))}
+            {procesos.map((p) =>
+              editingProcessId === p.id && editProcess ? (
+                <div
+                  key={p.id}
+                  className="bg-gray-50 border p-4 rounded-lg shadow"
+                >
+                  <h3 className="text-lg font-semibold mb-2">{p.id}</h3>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    <div className="flex flex-col">
+                      <label className="text-sm">Llegada</label>
+                      <input
+                        type="text"
+                        className="border p-2 rounded"
+                        value={editProcess.llegada}
+                        onChange={(e) =>
+                          setEditProcess({
+                            ...editProcess,
+                            llegada: +e.target.value,
+                          })
+                        }
+                        onKeyDown={handleKeyDown}
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="text-sm">Duración</label>
+                      <input
+                        type="text"
+                        className="border p-2 rounded"
+                        value={editProcess.duracion}
+                        onChange={(e) =>
+                          setEditProcess({
+                            ...editProcess,
+                            duracion: +e.target.value,
+                          })
+                        }
+                        onKeyDown={handleKeyDown}
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="text-sm">Prioridad</label>
+                      <input
+                        type="text"
+                        className="border p-2 rounded"
+                        value={editProcess.prioridad}
+                        onChange={(e) =>
+                          setEditProcess({
+                            ...editProcess,
+                            prioridad: +e.target.value || 1,
+                          })
+                        }
+                        onKeyDown={handleKeyDown}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="bg-green-600 text-white px-4 py-2 rounded"
+                      onClick={() => handleSaveEdit(p.id)}
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      className="bg-gray-600 text-white px-4 py-2 rounded"
+                      onClick={handleCancelEdit}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                  {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+                </div>
+              ) : (
+                <div
+                  key={p.id}
+                  className="bg-gray-50 border p-4 rounded-lg shadow"
+                >
+                  <h3 className="text-lg font-semibold">{p.id}</h3>
+                  <p>Llegada: {p.llegada}</p>
+                  <p>Duración: {p.duracion}</p>
+                  <p>Prioridad: {p.prioridad}</p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      className="bg-yellow-600 text-white px-4 py-2 rounded"
+                      onClick={() => handleEditProcess(p.id)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="bg-red-600 text-white px-4 py-2 rounded"
+                      onClick={() => handleDeleteProcess(p.id)}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>
 
-      <select
-        className="mb-4 p-2 border rounded"
-        onChange={(e) => onSelectAlgoritmo(e.target.value)}
-      >
-        <option value="">Seleccionar Algoritmo</option>
-        <option value="FCFS">FCFS</option>
-        <option value="SJF">SJF</option>
-        <option value="RoundRobin">Round Robin</option>
-        <option value="Prioridades">Prioridades</option>
-        <option value="PQS">PQS (Quantum y Prioridad)</option>
+      {(onSelect.includes("RoundRobin") || onSelect.includes("PQS")) && (
+        <div className="bg-white p-4 rounded shadow mb-6">
+          <h2 className="text-xl font-semibold mb-2">Configuración de Quantum</h2>
+          <div className="flex flex-col w-1/4">
+            <label className="text-sm">Quantum</label>
+            <input
+              type="text"
+              className="border p-2 rounded"
+              value={quantum}
+              onChange={(e) => setQuantum(+e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={!(onSelect.includes("RoundRobin") || onSelect.includes("PQS"))}
+            />
+          </div>
+        </div>
+      )}
 
-        <option value="Todos">Todos</option>
-      </select>
-      <div className="mb-6">
+      <div className="bg-white p-4 rounded shadow mb-6">
+        <h2 className="text-xl font-semibold mb-2">Seleccionar Algoritmos</h2>
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              className="mr-2"
+              checked={onSelect.length === algoritmos.length}
+              onChange={() => handleAlgoritmoChange("Todos")}
+            />
+            Todos
+          </label>
+          {algoritmos.map((algoritmo) => (
+            <label key={algoritmo} className="flex items-center">
+              <input
+                type="checkbox"
+                className="mr-2"
+                checked={onSelect.includes(algoritmo)}
+                onChange={() => handleAlgoritmoChange(algoritmo)}
+              />
+              {algoritmo}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6 flex gap-4">
         <button
           className={`px-6 py-3 rounded text-white font-bold ${
             procesos.length === 0 || procesos.every((p) => p.duracion <= 0)
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-green-600 hover:bg-green-700"
           }`}
-          onClick={ejecutar}
+          onClick={() => ejecutar()}
           disabled={
             procesos.length === 0 || procesos.every((p) => p.duracion <= 0)
           }
         >
           3. Ejecutar Algoritmos
+        </button>
+        <button
+          className="px-6 py-3 rounded text-white font-bold bg-red-600 hover:bg-red-700"
+          onClick={resetearTodo}
+        >
+          Restablecer
         </button>
       </div>
 
