@@ -37,7 +37,7 @@ Este proyecto es una aplicación web desarrollada con **React** y **TypeScript**
 
 ## 📂 Estructura
 
-- `SimuladorPlanificacion.tsx`: Componente principal con lógica y visualización.
+- `App.tsx`: Componente principal con lógica y visualización.
 - Cálculo separado por algoritmo (`FCFS`, `SJF`, `Round Robin`, `Prioridades`).
 - Gantt y tabla de resultados generados dinámicamente.
 
