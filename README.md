@@ -1,54 +1,51 @@
-# React + TypeScript + Vite
+# Simulador de Planificación de Procesos
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Este proyecto es una aplicación web desarrollada con **React** y **TypeScript** que permite simular distintos algoritmos de planificación de procesos en sistemas operativos. Está orientado a propósitos educativos y de demostración.
 
-Currently, two official plugins are available:
+## ✨ Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Agregar procesos con:
+  - Tiempo de llegada
+  - Duración (Ráfaga)
+  - Prioridad
+- Selección de algoritmo de planificación:
+  - **FCFS** (First Come First Served)
+  - **SJF** (Shortest Job First)
+  - **Round Robin**
+  - **Prioridades**
+  - **Todos** (para comparar)
+- Generación de:
+  - **Diagrama de Gantt** visual por cada algoritmo
+  - **Tabla de resultados** con:
+    - Orden de ejecución
+    - Tiempo de espera
+    - Tiempo de retorno
 
-## Expanding the ESLint configuration
+## 📊 Ejemplo de tabla
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+| Proceso | Duración / T. Ráfaga | Orden | Tiempo de Espera | Tiempo de Retorno |
+|---------|----------------------|-------|------------------|-------------------|
+| P1      | 5                    | 1     | 0                | 5                 |
+| P2      | 3                    | 2     | 5                | 8                 |
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+## 🚀 Tecnologías
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- React
+- TypeScript
+- TailwindCSS (estilos)
+- React Hooks (`useState`)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 📂 Estructura
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+- `App.tsx`: Componente principal con lógica y visualización.
+- Cálculo separado por algoritmo (`FCFS`, `SJF`, `Round Robin`, `Prioridades`).
+- Gantt y tabla de resultados generados dinámicamente.
+
+## 📌 Cómo ejecutar
+
+```bash
+# Instalar dependencias
+npm install
+
+# Ejecutar en modo desarrollo
+npm run dev
