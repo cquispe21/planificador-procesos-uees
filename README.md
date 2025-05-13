@@ -31,7 +31,7 @@ Este proyecto es una aplicación web desarrollada con **React** y **JavaScript**
 ## 🚀 Tecnologías
 
 - React
-- TypeScript
+- JavaScript
 - TailwindCSS (estilos)
 - React Hooks (`useState`)
 
