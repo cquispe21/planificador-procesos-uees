@@ -1,6 +1,6 @@
 # Simulador de Planificación de Procesos
 
-Este proyecto es una aplicación web desarrollada con **React** y **TypeScript** que permite simular distintos algoritmos de planificación de procesos en sistemas operativos. Está orientado a propósitos educativos y de demostración.
+Este proyecto es una aplicación web desarrollada con **React** y **JavaScript** que permite simular distintos algoritmos de planificación de procesos en sistemas operativos. Está orientado a propósitos educativos y de demostración.
 
 ## ✨ Funcionalidades
 
